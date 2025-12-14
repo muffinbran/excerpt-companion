@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 
 
 class NoteModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True, validate_by_name=True)
     pitch: str = Field(..., description="The pitch of the note (e.g., C4, D#5)")
     duration_quarter: float = Field(
         ..., description="Duration of the note in quarter lengths"
@@ -11,6 +12,7 @@ class NoteModel(BaseModel):
 
 
 class RestModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True, validate_by_name=True)
     duration_quarter: float = Field(
         ..., description="Duration of the rest in quarter lengths"
     )
@@ -21,9 +23,9 @@ NoteOrRest = NoteModel | RestModel
 
 
 class ExcerptModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True, validate_by_name=True)
     # Keep ID as a string for minimal compatibility (can be UUID string)
     id: str = Field(..., description="The unique identifier of the excerpt")
-    # source_path is useful for debugging but optional for a minimal build
     source_path: Optional[str] = Field(
         None, description="The source path of the excerpt file"
     )
