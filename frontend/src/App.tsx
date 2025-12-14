@@ -1,7 +1,88 @@
+import { useState } from "react";
+import Toolbar from "./components/Toolbar";
+import ScoreArea from "./components/ScoreArea";
+import Metronome from "./components/Metronome";
+import RecordingPanel from "./components/RecordingPanel";
+import InstrumentDialog from "./components/InstrumentDialog";
+
 function App() {
+  const [isInstrumentDialogOpen, setIsInstrumentDialogOpen] = useState(false);
+  const [currentInstrument, setCurrentInstrument] = useState("Clarinet");
+  const [currentExcerpt, setCurrentExcerpt] = useState("Mozart Exposition");
+  const [goalTempo] = useState(120);
+  const [currentTempo, setCurrentTempo] = useState(120);
+  const [isMetronomeRunning, setIsMetronomeRunning] = useState(false);
+  const [tempInstrument, setTempInstrument] = useState("Clarinet");
+  const [tempExcerpt, setTempExcerpt] = useState("Mozart Exposition");
+
+  const handleTempoChange = (value: number) => {
+    setCurrentTempo(value);
+  };
+
+  const handleTempoDecrement = () => {
+    setCurrentTempo(Math.max(60, currentTempo - 5));
+  };
+
+  const handleTempoIncrement = () => {
+    setCurrentTempo(Math.min(200, currentTempo + 5));
+  };
+
+  const toggleMetronome = () => {
+    setIsMetronomeRunning(!isMetronomeRunning);
+  };
+
+  const handleApplySelection = () => {
+    setCurrentInstrument(tempInstrument);
+    setCurrentExcerpt(tempExcerpt);
+    setIsInstrumentDialogOpen(false);
+  };
+
+  const handleDialogOpen = () => {
+    setTempInstrument(currentInstrument);
+    setTempExcerpt(currentExcerpt);
+    setIsInstrumentDialogOpen(true);
+  };
+
   return (
-    <div className="min-h-[100dvh] h-[100dvh] w-full text-gray-100 md:p-8 md:min-h-screen md:h-auto">
-      <h1 className="text-3xl font-bold underline">Hello world!</h1>
+    <div className="min-h-[100dvh] h-[100dvh] w-full text-gray-100 flex">
+      {/* Left Panel - Score and Toolbar */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <Toolbar
+          currentInstrument={currentInstrument}
+          currentExcerpt={currentExcerpt}
+          goalTempo={goalTempo}
+          onOpenDialog={handleDialogOpen}
+        />
+
+        <ScoreArea currentExcerpt={currentExcerpt} />
+      </div>
+
+      {/* Right Panel - Controls */}
+      <div className="max-w-md border-l border-white/20 flex flex-col">
+        {/* Top spacer to align with main content */}
+        <div className="h-4"></div>
+
+        <Metronome
+          currentTempo={currentTempo}
+          isMetronomeRunning={isMetronomeRunning}
+          onTempoChange={handleTempoChange}
+          onTempoDecrement={handleTempoDecrement}
+          onTempoIncrement={handleTempoIncrement}
+          onToggleMetronome={toggleMetronome}
+        />
+
+        <RecordingPanel />
+      </div>
+
+      <InstrumentDialog
+        isOpen={isInstrumentDialogOpen}
+        tempInstrument={tempInstrument}
+        tempExcerpt={tempExcerpt}
+        onTempInstrumentChange={setTempInstrument}
+        onTempExcerptChange={setTempExcerpt}
+        onCancel={() => setIsInstrumentDialogOpen(false)}
+        onApply={handleApplySelection}
+      />
     </div>
   );
 }
