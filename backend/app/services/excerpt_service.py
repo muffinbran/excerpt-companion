@@ -20,7 +20,7 @@ def get_excerpts_dir() -> Path:
 
 
 def _token_from_music21(obj) -> dict:
-    """Convert a music21 Note, Rest, or Chord to a serializable dict matching NoteModel/RestModel."""
+    """Convert a music21 Note or Rest to a serializable dict matching NoteModel/RestModel."""
     if isinstance(obj, note.Rest):
         return {
             "pitch": "rest",
