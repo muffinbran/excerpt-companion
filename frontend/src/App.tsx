@@ -7,12 +7,12 @@ import InstrumentDialog from "./components/InstrumentDialog";
 
 function App() {
   const [isInstrumentDialogOpen, setIsInstrumentDialogOpen] = useState(false);
-  const [currentInstrument, setCurrentInstrument] = useState("Clarinet");
-  const [currentExcerpt, setCurrentExcerpt] = useState("Mozart Exposition");
+  const [currentInstrument, setCurrentInstrument] = useState("");
+  const [currentExcerpt, setCurrentExcerpt] = useState("");
   const [currentTempo, setCurrentTempo] = useState(120);
   const [isMetronomeRunning, setIsMetronomeRunning] = useState(false);
-  const [tempInstrument, setTempInstrument] = useState("Clarinet");
-  const [tempExcerpt, setTempExcerpt] = useState("Mozart Exposition");
+  const [tempInstrument, setTempInstrument] = useState("");
+  const [tempExcerpt, setTempExcerpt] = useState("");
 
   const handleTempoChange = (value: number) => {
     setCurrentTempo(value);

@@ -9,6 +9,11 @@ const OSMD_CONFIG = {
   drawLyrics: false,
   drawSlurs: true,
   coloringEnabled: false,
+  drawTitle: false,
+  drawSubtitle: false,
+  drawComposer: false,
+  drawCredits: false,
+  drawMetronomeMarks: false,
 };
 
 const DOM_CLEANUP_DELAY = 50;

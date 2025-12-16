@@ -89,7 +89,7 @@ EXCERPTS_DIR = get_excerpts_dir()
 
 # Testing (will clean up later)
 if __name__ == "__main__":
-    example_file = EXCERPTS_DIR / "Mozart Exposition (clarinet).mxl"
+    example_file = EXCERPTS_DIR / "clarinet/Mozart Exposition.mxl"
     score = converter.parse(str(example_file))
     excerpt = parse_excerpt(example_file)
     print(excerpt)

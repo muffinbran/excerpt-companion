@@ -17,7 +17,9 @@ export default function Toolbar({
           onClick={onOpenDialog}
           className="bg-gray-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          {currentInstrument} - {currentExcerpt}
+          {!currentInstrument && !currentExcerpt
+            ? "Select an excerpt..."
+            : `${currentInstrument || "No instrument"} - ${currentExcerpt || "No excerpt"}`}
         </button>
 
         {/* Settings */}

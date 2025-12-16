@@ -10,13 +10,27 @@ from app.services.excerpt_service import get_excerpts_dir, parse_excerpt
 router = APIRouter(prefix="/excerpts", tags=["excerpts"])
 
 
+@router.get("/instruments")
+async def get_instruments():
+    """Get all available instruments (subdirectories with excerpts)."""
+    excerpts_dir = get_excerpts_dir()
+    instruments = []
+
+    for item in excerpts_dir.iterdir():
+        if item.is_dir() and any(item.glob("*.mxl")):
+            instruments.append(item.name.title())  # Capitalize first letter
+
+    return sorted(instruments)
+
+
 @router.get("/", response_model=List[ExcerptModel])
 async def get_all_excerpts():
     """Get all available excerpts."""
     excerpts_dir = get_excerpts_dir()
     excerpts = []
 
-    for file_path in excerpts_dir.glob("*.mxl"):
+    # Search recursively for .mxl files in subdirectories
+    for file_path in excerpts_dir.rglob("*.mxl"):
         try:
             excerpt = parse_excerpt(file_path)
             if excerpt:
@@ -33,8 +47,8 @@ async def get_excerpt_by_title(excerpt_title: str):
     """Get a specific excerpt by title."""
     excerpts_dir = get_excerpts_dir()
 
-    # Look for files that match the title
-    for file_path in excerpts_dir.glob("*.mxl"):
+    # Look for files that match the title (search recursively)
+    for file_path in excerpts_dir.rglob("*.mxl"):
         if excerpt_title.lower() in file_path.stem.lower():
             try:
                 excerpt = parse_excerpt(file_path)
@@ -53,8 +67,8 @@ async def get_excerpt_musicxml(excerpt_title: str):
     """Get the raw MusicXML content for a specific excerpt."""
     excerpts_dir = get_excerpts_dir()
 
-    # Look for files that match the title
-    for file_path in excerpts_dir.glob("*.mxl"):
+    # Look for files that match the title (search recursively)
+    for file_path in excerpts_dir.rglob("*.mxl"):
         if excerpt_title.lower() in file_path.stem.lower():
             try:
                 # Extract MusicXML from .mxl file (which is a compressed format)
