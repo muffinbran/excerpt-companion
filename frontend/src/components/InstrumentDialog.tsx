@@ -1,3 +1,11 @@
+import { useState, useEffect } from "react";
+
+interface Excerpt {
+  id: string;
+  title: string;
+  composer?: string;
+}
+
 interface InstrumentDialogProps {
   isOpen: boolean;
   tempInstrument: string;
@@ -17,6 +25,53 @@ export default function InstrumentDialog({
   onCancel,
   onApply,
 }: InstrumentDialogProps) {
+  const [instruments, setInstruments] = useState<string[]>([]);
+  const [excerpts, setExcerpts] = useState<Excerpt[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchInstruments();
+      fetchExcerpts();
+    }
+  }, [isOpen]);
+
+  // Clear excerpt selection when instrument changes
+  useEffect(() => {
+    if (tempExcerpt && tempInstrument) {
+      onTempExcerptChange("");
+    }
+  }, [tempInstrument]);
+
+  const fetchInstruments = async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:8000/excerpts/instruments",
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setInstruments(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch instruments:", error);
+    }
+  };
+
+  const fetchExcerpts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("http://localhost:8000/excerpts/");
+      if (response.ok) {
+        const data = await response.json();
+        setExcerpts(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch excerpts:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -32,13 +87,12 @@ export default function InstrumentDialog({
               onChange={(e) => onTempInstrumentChange(e.target.value)}
               className="w-full bg-gray-700 border border-white/20 rounded-lg px-3 py-2"
             >
-              <option>Clarinet</option>
-              <option>Flute</option>
-              <option>Oboe</option>
-              <option>Bassoon</option>
-              <option>Horn</option>
-              <option>Trumpet</option>
-              <option>Violin</option>
+              <option value="">Select an instrument...</option>
+              {instruments.map((instrument) => (
+                <option key={instrument} value={instrument}>
+                  {instrument}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -47,13 +101,31 @@ export default function InstrumentDialog({
             <select
               value={tempExcerpt}
               onChange={(e) => onTempExcerptChange(e.target.value)}
-              className="w-full bg-gray-700 border border-white/20 rounded-lg px-3 py-2"
+              className={`w-full bg-gray-700 border border-white/20 rounded-lg px-3 py-2 ${
+                !tempInstrument ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              disabled={isLoading || !tempInstrument}
             >
-              <option>Mozart Exposition</option>
-              <option>Brahms Symphony No. 1</option>
-              <option>Beethoven Symphony No. 5</option>
-              <option>Tchaikovsky Symphony No. 4</option>
+              <option value="">
+                {!tempInstrument
+                  ? "Select an instrument first..."
+                  : "Select an excerpt..."}
+              </option>
+              {excerpts.map((excerpt) => (
+                <option key={excerpt.id} value={excerpt.title}>
+                  {excerpt.title}{" "}
+                  {excerpt.composer ? `- ${excerpt.composer}` : ""}
+                </option>
+              ))}
             </select>
+            {isLoading && (
+              <p className="text-sm text-gray-400 mt-1">Loading excerpts...</p>
+            )}
+            {!tempInstrument && (
+              <p className="text-sm text-gray-400 mt-1">
+                Please select an instrument to view available excerpts.
+              </p>
+            )}
           </div>
         </div>
 

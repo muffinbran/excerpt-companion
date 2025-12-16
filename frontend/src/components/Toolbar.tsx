@@ -1,14 +1,12 @@
 interface ToolbarProps {
   currentInstrument: string;
   currentExcerpt: string;
-  goalTempo: number;
   onOpenDialog: () => void;
 }
 
 export default function Toolbar({
   currentInstrument,
   currentExcerpt,
-  goalTempo,
   onOpenDialog,
 }: ToolbarProps) {
   return (
@@ -19,7 +17,9 @@ export default function Toolbar({
           onClick={onOpenDialog}
           className="bg-gray-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          {currentInstrument} - {currentExcerpt}
+          {!currentInstrument && !currentExcerpt
+            ? "Select an excerpt..."
+            : `${currentInstrument || "No instrument"} - ${currentExcerpt || "No excerpt"}`}
         </button>
 
         {/* Settings */}
@@ -44,13 +44,6 @@ export default function Toolbar({
             />
           </svg>
         </button>
-      </div>
-
-      {/* Goal Tempo */}
-      <div className="flex items-center gap-2 bg-gray-700 px-3 py-2 rounded-lg">
-        <span className="text-sm text-gray-300">Goal:</span>
-        <span className="text-lg font-bold text-gray-200">{goalTempo}</span>
-        <span className="text-sm text-gray-300">BPM</span>
       </div>
     </div>
   );
