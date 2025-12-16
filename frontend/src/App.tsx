@@ -9,7 +9,6 @@ function App() {
   const [isInstrumentDialogOpen, setIsInstrumentDialogOpen] = useState(false);
   const [currentInstrument, setCurrentInstrument] = useState("Clarinet");
   const [currentExcerpt, setCurrentExcerpt] = useState("Mozart Exposition");
-  const [goalTempo] = useState(120);
   const [currentTempo, setCurrentTempo] = useState(120);
   const [isMetronomeRunning, setIsMetronomeRunning] = useState(false);
   const [tempInstrument, setTempInstrument] = useState("Clarinet");
@@ -50,7 +49,6 @@ function App() {
         <Toolbar
           currentInstrument={currentInstrument}
           currentExcerpt={currentExcerpt}
-          goalTempo={goalTempo}
           onOpenDialog={handleDialogOpen}
         />
 
