@@ -69,7 +69,10 @@ function App() {
           onToggleMetronome={toggleMetronome}
         />
 
-        <RecordingPanel />
+        <RecordingPanel
+          currentInstrument={currentInstrument}
+          currentExcerpt={currentExcerpt}
+        />
       </div>
 
       <InstrumentDialog
