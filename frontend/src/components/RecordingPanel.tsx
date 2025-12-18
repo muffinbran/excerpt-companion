@@ -1,14 +1,19 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type RefObject } from "react";
 import { WebSocketManager } from "../services/WebSocketManager";
+import type { OSMDScoreHandle } from "./OSMDScore";
 
 interface RecordingPanelProps {
   currentInstrument: string;
   currentExcerpt: string;
+  currentTempo: number;
+  osmdScoreRef: RefObject<OSMDScoreHandle | null>;
 }
 
 export default function RecordingPanel({
   currentInstrument,
   currentExcerpt,
+  currentTempo,
+  osmdScoreRef,
 }: RecordingPanelProps) {
   const [isRecording, setIsRecording] = useState(false);
   const managerRef = useRef<WebSocketManager | null>(null);
@@ -34,9 +39,20 @@ export default function RecordingPanel({
 
     const manager = new WebSocketManager();
     managerRef.current = manager;
+
+    // Set up onset detection callback to start cursor
+    manager.onSoundOnset = () => {
+      console.log("Sound onset detected! Starting OSMD cursor...");
+      osmdScoreRef.current?.startCursor(currentTempo);
+    };
+
     try {
+      // Reset cursor before starting
+      osmdScoreRef.current?.resetCursor();
+
       await manager.connectAndStart(currentExcerpt);
       setIsRecording(true);
+      console.log("Recording started. Waiting for sound onset...");
     } catch (err) {
       console.error("Failed to start recording:", err);
       managerRef.current = null;
@@ -45,6 +61,9 @@ export default function RecordingPanel({
   };
 
   const stopRecording = () => {
+    // Stop the cursor
+    osmdScoreRef.current?.stopCursor();
+
     managerRef.current?.disconnect();
     managerRef.current = null;
     setIsRecording(false);

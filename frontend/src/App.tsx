@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Toolbar from "./components/Toolbar";
 import ScoreArea from "./components/ScoreArea";
 import Metronome from "./components/Metronome";
 import RecordingPanel from "./components/RecordingPanel";
 import InstrumentDialog from "./components/InstrumentDialog";
+import type { OSMDScoreHandle } from "./components/OSMDScore";
 
 function App() {
   const [isInstrumentDialogOpen, setIsInstrumentDialogOpen] = useState(false);
@@ -13,6 +14,7 @@ function App() {
   const [isMetronomeRunning, setIsMetronomeRunning] = useState(false);
   const [tempInstrument, setTempInstrument] = useState("");
   const [tempExcerpt, setTempExcerpt] = useState("");
+  const osmdScoreRef = useRef<OSMDScoreHandle | null>(null);
 
   const handleTempoChange = (value: number) => {
     setCurrentTempo(value);
@@ -52,7 +54,7 @@ function App() {
           onOpenDialog={handleDialogOpen}
         />
 
-        <ScoreArea currentExcerpt={currentExcerpt} />
+        <ScoreArea ref={osmdScoreRef} currentExcerpt={currentExcerpt} />
       </div>
 
       {/* Right Panel - Controls */}
@@ -72,6 +74,8 @@ function App() {
         <RecordingPanel
           currentInstrument={currentInstrument}
           currentExcerpt={currentExcerpt}
+          currentTempo={currentTempo}
+          osmdScoreRef={osmdScoreRef}
         />
       </div>
 

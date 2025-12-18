@@ -1,6 +1,9 @@
 const API_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
 const SAMPLE_RATE = 44100;
 
+// Onset detection parameters
+const ONSET_THRESHOLD = 0.02; // RMS threshold to detect sound
+
 // Generate a unique session ID for this user session
 function generateSessionId(): string {
   return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -19,6 +22,14 @@ const WORKLET_CODE = `
       return buffer;
   }
 
+  function calculateRMS(input) {
+      let sum = 0;
+      for (let i = 0; i < input.length; i++) {
+          sum += input[i] * input[i];
+      }
+      return Math.sqrt(sum / input.length);
+  }
+
   class AudioProcessor extends AudioWorkletProcessor {
       constructor() {
           super();
@@ -32,8 +43,13 @@ const WORKLET_CODE = `
 
           if (inputChannelData && inputChannelData.length > 0) {
               const buffer = floatTo16BitPCM(inputChannelData);
-              // Post the converted buffer back to the main thread
-              this.port.postMessage(buffer, [buffer]);
+              const rms = calculateRMS(inputChannelData);
+              
+              // Post both audio buffer and RMS value
+              this.port.postMessage({
+                  audioBuffer: buffer,
+                  rms: rms
+              }, [buffer]);
           }
 
           return true;
@@ -48,7 +64,9 @@ export class WebSocketManager {
   private audioContext: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private sessionId: string;
+  private hasDetectedOnset: boolean = false;
   public onFeedback: (data: any) => void = () => {};
+  public onSoundOnset: () => void = () => {};
 
   constructor() {
     this.sessionId = generateSessionId();
@@ -160,11 +178,21 @@ export class WebSocketManager {
         "audio-processor",
       );
       this.workletNode.port.onmessage = (event) => {
+        const data = event.data;
+
+        // Check for onset detection (only once at the start)
+        if (!this.hasDetectedOnset && data.rms > ONSET_THRESHOLD) {
+          console.log(`WebSocketManager: Sound onset detected! RMS: ${data.rms}`);
+          this.hasDetectedOnset = true;
+          this.onSoundOnset();
+        }
+
+        // Send audio buffer to WebSocket
         if (
           this.ws?.readyState === WebSocket.OPEN &&
-          event.data instanceof ArrayBuffer
+          data.audioBuffer instanceof ArrayBuffer
         ) {
-          this.ws.send(event.data);
+          this.ws.send(data.audioBuffer);
         }
       };
       this.workletNode.port.postMessage({
@@ -187,6 +215,8 @@ export class WebSocketManager {
 
   public disconnect() {
     console.log("WebSocketManager: disconnect called");
+    this.hasDetectedOnset = false; // Reset onset detection for next recording
+
     if (this.ws) {
       console.log("WebSocketManager: closing websocket");
       try {
