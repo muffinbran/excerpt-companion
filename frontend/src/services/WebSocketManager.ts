@@ -1,8 +1,6 @@
 const API_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
 const SAMPLE_RATE = 44100;
 
-// Onset detection parameters
-const ONSET_THRESHOLD = 0.02; // RMS threshold to detect sound
 
 // Generate a unique session ID for this user session
 function generateSessionId(): string {
@@ -22,14 +20,6 @@ const WORKLET_CODE = `
       return buffer;
   }
 
-  function calculateRMS(input) {
-      let sum = 0;
-      for (let i = 0; i < input.length; i++) {
-          sum += input[i] * input[i];
-      }
-      return Math.sqrt(sum / input.length);
-  }
-
   class AudioProcessor extends AudioWorkletProcessor {
       constructor() {
           super();
@@ -43,12 +33,10 @@ const WORKLET_CODE = `
 
           if (inputChannelData && inputChannelData.length > 0) {
               const buffer = floatTo16BitPCM(inputChannelData);
-              const rms = calculateRMS(inputChannelData);
               
-              // Post both audio buffer and RMS value
+              // Post audio buffer (backend handles analysis)
               this.port.postMessage({
-                  audioBuffer: buffer,
-                  rms: rms
+                  audioBuffer: buffer
               }, [buffer]);
           }
 
@@ -67,25 +55,20 @@ export class WebSocketManager {
   private hasDetectedOnset: boolean = false;
   public onFeedback: (data: any) => void = () => {};
   public onSoundOnset: () => void = () => {};
+  public onAnalysis: (analysis: any) => void = () => {}; // Callback for analysis data
 
   constructor() {
     this.sessionId = generateSessionId();
-    console.log(
-      `WebSocketManager: initialized with session ID: ${this.sessionId}`,
-    );
   }
 
-  public async connectAndStart(excerptId: string) {
+  public async connectAndStart(excerptId: string, tempo: number = 120) {
     if (this.ws) {
-      console.log(
-        "WebSocketManager: closing existing websocket before creating a new one.",
-      );
       this.ws.close();
     }
 
-    console.log(
-      `WebSocketManager: creating websocket to ${API_URL}/ws/audio/${excerptId}/${this.sessionId}`,
-    );
+    // Reset onset detection for new session
+    this.hasDetectedOnset = false;
+
     this.ws = new WebSocket(
       `${API_URL}/ws/audio/${excerptId}/${this.sessionId}`,
     );
@@ -99,7 +82,11 @@ export class WebSocketManager {
 
     // Wire lifecycle handlers
     this.ws.onopen = () => {
-      console.log("WebSocketManager: websocket open");
+      // Send tempo configuration to backend
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        console.log(`[WebSocket] Sending tempo: ${tempo} BPM`);
+        this.ws.send(JSON.stringify({ command: "set_tempo", tempo: tempo }));
+      }
       this.startMicrophoneStream();
     };
 
@@ -107,38 +94,118 @@ export class WebSocketManager {
       try {
         const data = JSON.parse(event.data);
         this.onFeedback(data);
-      } catch (e) {}
+
+        // Handle analysis data from backend
+        if (data.status === "analyzed" && data.analysis) {
+          const analysis = data.analysis;
+
+          // Handle onset detection from backend
+          if (analysis.onset_detected && !this.hasDetectedOnset) {
+            this.hasDetectedOnset = true;
+            this.onSoundOnset();
+          }
+
+          // Log pitch detection with score comparison (only after first onset detected)
+          if (analysis.pitch_hz && analysis.expected_pitch && this.hasDetectedOnset) {
+            const centsStr = analysis.cents_off
+              ? (analysis.cents_off > 0 ? `+${analysis.cents_off.toFixed(1)}` : analysis.cents_off.toFixed(1))
+              : "?";
+
+            // Enhanced visual feedback based on accuracy level
+            let accuracyIcon = "?";
+            let color = "#888888";
+            let accuracyText = "Unknown";
+
+            if (analysis.accuracy_level) {
+              switch (analysis.accuracy_level) {
+                case "excellent":
+                  accuracyIcon = "🎯";
+                  color = "#00ff00";
+                  accuracyText = "Excellent";
+                  break;
+                case "good":
+                  accuracyIcon = "✓";
+                  color = "#90ee90";
+                  accuracyText = "Good";
+                  break;
+                case "fair":
+                  accuracyIcon = "~";
+                  color = "#ffff00";
+                  accuracyText = "Fair";
+                  break;
+                case "poor":
+                  accuracyIcon = "✗";
+                  color = "#ff6b6b";
+                  accuracyText = "Poor";
+                  break;
+                case "very_poor":
+                  accuracyIcon = "❌";
+                  color = "#ff0000";
+                  accuracyText = "Very Poor";
+                  break;
+                default:
+                  // Fallback to original behavior
+                  accuracyIcon = analysis.pitch_accurate ? "✓" : "✗";
+                  color = analysis.pitch_accurate ? "#00ff00" : "#ff6b6b";
+                  accuracyText = analysis.pitch_accurate ? "Good" : "Off";
+              }
+            } else {
+              // Fallback to original behavior if no accuracy_level
+              accuracyIcon = analysis.pitch_accurate ? "✓" : "✗";
+              color = analysis.pitch_accurate ? "#00ff00" : "#ff6b6b";
+              accuracyText = analysis.pitch_accurate ? "Good" : "Off";
+            }
+
+            const detectedNote = analysis.detected_note || "?";
+            const wrongNoteWarning = analysis.is_right_note === false ? " [WRONG NOTE]" : "";
+
+            console.log(
+              `%c${accuracyIcon} Note ${analysis.current_note_index}: Expected ${analysis.expected_pitch} | ` +
+              `Detected ${detectedNote} (${analysis.pitch_hz.toFixed(1)} Hz) | ` +
+              `Cents off: ${centsStr} | Accuracy: ${accuracyText}${wrongNoteWarning}`,
+              `color: ${color}; font-weight: bold`
+            );
+          }
+
+          // Call analysis callback for custom handling
+          this.onAnalysis(analysis);
+        }
+
+        // Handle summary/report data
+        if (data.status === "summary") {
+          console.log("%c📋 PERFORMANCE SUMMARY", "color: #ffaa00; font-weight: bold; font-size: 14px");
+          console.table(data.data);
+
+          // Also log as structured object for inspection
+          console.log("Raw summary data:", data.data);
+        }
+      } catch (e) {
+        console.warn("Failed to parse WebSocket message:", e);
+      }
     };
 
     this.ws.onerror = (err) => {
-      console.error("WebSocketManager: websocket error:", err);
+      console.error("WebSocket error:", err);
     };
 
     this.ws.onclose = (event) => {
-      console.log("WebSocketManager: websocket closed", {
-        code: event.code,
-        reason: event.reason,
-        wasClean: event.wasClean,
-      });
+      if (!event.wasClean) {
+        console.warn("WebSocket closed unexpectedly:", event.reason || "Unknown reason");
+      }
     };
 
     return new Promise<void>((resolve, reject) => {
-      // Resolve once opened, or reject on error/close before open
       const onOpen = () => {
-        console.log("WebSocketManager: connected.");
         cleanupListeners();
         resolve();
       };
       const onError = (err: Event) => {
-        console.error("WebSocketManager: error while connecting:", err);
+        console.error("WebSocket connection error:", err);
         cleanupListeners();
         reject(err);
       };
-      const onCloseBeforeOpen = (ev: CloseEvent) => {
-        console.warn(
-          "WebSocketManager: closed before connection was established:",
-          ev,
-        );
+      const onCloseBeforeOpen = () => {
+        console.warn("WebSocket closed before connection established");
         cleanupListeners();
         reject(new Error("WebSocket closed before open"));
       };
@@ -162,13 +229,10 @@ export class WebSocketManager {
 
   private async startMicrophoneStream() {
     if (!this.audioContext || !this.ws) {
-      console.warn(
-        "WebSocketManager: cannot start microphone stream, missing audioContext or websocket.",
-      );
+      console.warn("Cannot start microphone: missing context or connection");
       return;
     }
     try {
-      console.log("WebSocketManager: starting microphone stream");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { sampleRate: SAMPLE_RATE },
       });
@@ -179,13 +243,6 @@ export class WebSocketManager {
       );
       this.workletNode.port.onmessage = (event) => {
         const data = event.data;
-
-        // Check for onset detection (only once at the start)
-        if (!this.hasDetectedOnset && data.rms > ONSET_THRESHOLD) {
-          console.log(`WebSocketManager: Sound onset detected! RMS: ${data.rms}`);
-          this.hasDetectedOnset = true;
-          this.onSoundOnset();
-        }
 
         // Send audio buffer to WebSocket
         if (
@@ -201,52 +258,60 @@ export class WebSocketManager {
       });
       source.connect(this.workletNode);
       this.workletNode.connect(this.audioContext.destination);
-      console.log(
-        "WebSocketManager: microphone stream and worklet node started",
-      );
     } catch (error) {
-      console.error(
-        "WebSocketManager: Error accessing microphone or setting up AudioWorklet:",
-        error,
-      );
+      console.error("Error accessing microphone:", error);
       this.disconnect();
     }
   }
 
+  public requestSummary() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ command: "get_summary" }));
+    }
+  }
+
+  public sendNoteIndex(noteIndex: number) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log(`[WebSocket] Sending note index: ${noteIndex}`);
+      this.ws.send(JSON.stringify({ command: "set_note_index", note_index: noteIndex }));
+    } else {
+      console.warn(`[WebSocket] Cannot send note index ${noteIndex} - connection not open`);
+    }
+  }
+
   public disconnect() {
-    console.log("WebSocketManager: disconnect called");
-    this.hasDetectedOnset = false; // Reset onset detection for next recording
+    this.hasDetectedOnset = false;
+    this.requestSummary();
 
     if (this.ws) {
-      console.log("WebSocketManager: closing websocket");
       try {
-        this.ws.close();
+        setTimeout(() => {
+          if (this.ws) {
+            this.ws.close();
+          }
+        }, 100);
       } catch (e) {
-        console.error("WebSocketManager: error closing websocket", e);
+        console.error("Error closing WebSocket:", e);
       }
       this.ws = null;
     }
     if (this.workletNode) {
       try {
         this.workletNode.port.postMessage({ type: "disconnect" });
-      } catch (e) {
+      } catch {
         // ignore
       }
       try {
         this.workletNode.disconnect();
-      } catch (e) {
+      } catch {
         // ignore
       }
       this.workletNode = null;
-      console.log("WebSocketManager: worklet node stopped");
     }
     if (this.audioContext) {
       this.audioContext
         .close()
-        .then(() => console.log("WebSocketManager: audio context closed"))
-        .catch((e) =>
-          console.error("WebSocketManager: error closing audioContext", e),
-        );
+        .catch((e) => console.error("Error closing audio context:", e));
       this.audioContext = null;
     }
   }

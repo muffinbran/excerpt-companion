@@ -15,6 +15,16 @@ function App() {
   const [tempInstrument, setTempInstrument] = useState("");
   const [tempExcerpt, setTempExcerpt] = useState("");
   const osmdScoreRef = useRef<OSMDScoreHandle | null>(null);
+  const cursorMoveCallbackRef = useRef<((noteIndex: number) => void) | undefined>(undefined);
+
+  // Wrapper function that calls the ref's current value
+  const handleCursorMove = (noteIndex: number) => {
+    cursorMoveCallbackRef.current?.(noteIndex);
+  };
+
+  const setCursorMoveCallback = (callback: ((noteIndex: number) => void) | undefined) => {
+    cursorMoveCallbackRef.current = callback;
+  };
 
   const handleTempoChange = (value: number) => {
     setCurrentTempo(value);
@@ -54,7 +64,7 @@ function App() {
           onOpenDialog={handleDialogOpen}
         />
 
-        <ScoreArea ref={osmdScoreRef} currentExcerpt={currentExcerpt} />
+        <ScoreArea ref={osmdScoreRef} currentExcerpt={currentExcerpt} onCursorMove={handleCursorMove} />
       </div>
 
       {/* Right Panel - Controls */}
@@ -76,6 +86,7 @@ function App() {
           currentExcerpt={currentExcerpt}
           currentTempo={currentTempo}
           osmdScoreRef={osmdScoreRef}
+          onSetCursorMoveCallback={setCursorMoveCallback}
         />
       </div>
 

@@ -21,6 +21,7 @@ const DOM_CLEANUP_DELAY = 50;
 
 interface OSMDScoreProps {
   excerptTitle: string;
+  onCursorMove?: (noteIndex: number) => void;
 }
 
 export interface OSMDScoreHandle {
@@ -30,11 +31,12 @@ export interface OSMDScoreHandle {
 }
 
 const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
-  ({ excerptTitle }, ref) => {
+  ({ excerptTitle, onCursorMove }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const cursorIntervalRef = useRef<number | null>(null);
+    const currentNoteIndexRef = useRef<number>(0);
 
     // Expose cursor control methods to parent via ref
     useImperativeHandle(ref, () => ({
@@ -56,6 +58,13 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
         cursor.reset();
         cursor.show();
 
+        // Reset note index and notify
+        currentNoteIndexRef.current = 0;
+        if (onCursorMove) {
+          console.log(`[Cursor] Starting at note 0`);
+          onCursorMove(0);
+        }
+
         // Calculate milliseconds per quarter note
         const msPerQuarterNote = 60000 / tempo;
 
@@ -69,6 +78,13 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
 
           // Advance cursor to next note
           cursor.next();
+
+          // Increment note index and notify
+          currentNoteIndexRef.current++;
+          if (onCursorMove) {
+            console.log(`[Cursor] Advanced to note ${currentNoteIndexRef.current}`);
+            onCursorMove(currentNoteIndexRef.current);
+          }
 
           // Check if we've reached the end after advancing
           if (!cursor.iterator || cursor.iterator.EndReached) {

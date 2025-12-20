@@ -15,10 +15,11 @@ interface ExcerptMetadata {
 
 interface ScoreAreaProps {
   currentExcerpt: string;
+  onCursorMove?: (noteIndex: number) => void;
 }
 
 const ScoreArea = forwardRef<OSMDScoreHandle, ScoreAreaProps>(
-  ({ currentExcerpt }, ref) => {
+  ({ currentExcerpt, onCursorMove }, ref) => {
   const [excerptMetadata, setExcerptMetadata] =
     useState<ExcerptMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -146,7 +147,7 @@ const ScoreArea = forwardRef<OSMDScoreHandle, ScoreAreaProps>(
 
         {/* Score Content using OSMD - takes remaining space */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm flex-1">
-          <OSMDScore ref={ref} excerptTitle={currentExcerpt} />
+          <OSMDScore ref={ref} excerptTitle={currentExcerpt} onCursorMove={onCursorMove} />
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ interface RecordingPanelProps {
   currentExcerpt: string;
   currentTempo: number;
   osmdScoreRef: RefObject<OSMDScoreHandle | null>;
+  onSetCursorMoveCallback: (callback: ((noteIndex: number) => void) | undefined) => void;
 }
 
 export default function RecordingPanel({
@@ -14,6 +15,7 @@ export default function RecordingPanel({
   currentExcerpt,
   currentTempo,
   osmdScoreRef,
+  onSetCursorMoveCallback,
 }: RecordingPanelProps) {
   const [isRecording, setIsRecording] = useState(false);
   const managerRef = useRef<WebSocketManager | null>(null);
@@ -40,19 +42,37 @@ export default function RecordingPanel({
     const manager = new WebSocketManager();
     managerRef.current = manager;
 
+    // Set up cursor move callback to send note index to backend
+    const cursorMoveCallback = (noteIndex: number) => {
+      console.log(`[RecordingPanel] Cursor callback triggered for note ${noteIndex}`);
+      manager.sendNoteIndex(noteIndex);
+    };
+    onSetCursorMoveCallback(cursorMoveCallback);
+
     // Set up onset detection callback to start cursor
     manager.onSoundOnset = () => {
-      console.log("Sound onset detected! Starting OSMD cursor...");
+      console.log("%c🎯 Sound onset detected! Starting OSMD cursor...", "color: #00ff00; font-weight: bold");
       osmdScoreRef.current?.startCursor(currentTempo);
+    };
+
+    // Set up analysis callback to receive all backend data
+    manager.onAnalysis = (_analysis) => {
+      // Detailed logging is handled in WebSocketManager
+      // This callback can be used for real-time UI updates in the future
     };
 
     try {
       // Reset cursor before starting
       osmdScoreRef.current?.resetCursor();
 
-      await manager.connectAndStart(currentExcerpt);
+      console.log(`%c🎙️ Starting recording: ${currentExcerpt}`, "color: #33b5ff; font-weight: bold; font-size: 12px");
+      console.log(`%c⏱️ Tempo: ${currentTempo} BPM`, "color: #33b5ff");
+
+      await manager.connectAndStart(currentExcerpt, currentTempo);
       setIsRecording(true);
-      console.log("Recording started. Waiting for sound onset...");
+
+      console.log("%c✅ Recording started. Waiting for sound onset...", "color: #00ff00; font-weight: bold");
+      console.log("%c📊 Backend analyzing: pitch detection, onset detection, score comparison", "color: #999");
     } catch (err) {
       console.error("Failed to start recording:", err);
       managerRef.current = null;
@@ -61,12 +81,20 @@ export default function RecordingPanel({
   };
 
   const stopRecording = () => {
+    console.log("%c⏹️ Stopping recording...", "color: #ff6b6b; font-weight: bold");
+
     // Stop the cursor
     osmdScoreRef.current?.stopCursor();
 
+    // Clear cursor callback
+    onSetCursorMoveCallback(undefined);
+
+    // Disconnect will automatically request summary from backend
     managerRef.current?.disconnect();
     managerRef.current = null;
     setIsRecording(false);
+
+    console.log("%c✅ Recording stopped. Check above for performance summary.", "color: #ffaa00; font-weight: bold");
   };
 
   const toggleRecording = () => {
