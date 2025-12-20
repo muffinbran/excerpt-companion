@@ -93,3 +93,10 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+@layer base {
+  #cursorImg-0 {
+    height: 40px !important;
+    max-width: none !important;
+  }
+}

@@ -85,11 +85,44 @@ def parse_excerpt(file_path: Path) -> ExcerptModel | None:
         raise ValueError(f"Error parsing MusicXML file: {e}")
 
 
+def find_excerpt_by_title(title: str) -> ExcerptModel | None:
+    """
+    Find an excerpt by its title.
+
+    Args:
+        title: The title of the excerpt (case-insensitive partial match)
+
+    Returns:
+        ExcerptModel if found, None otherwise
+    """
+    excerpts_dir = get_excerpts_dir()
+
+    # Search for all MusicXML files
+    for file_path in excerpts_dir.rglob("*.mxl"):
+        try:
+            excerpt = parse_excerpt(file_path)
+            if excerpt and excerpt.title.lower() == title.lower():
+                return excerpt
+        except Exception:
+            continue
+
+    # Try .musicxml extension as well
+    for file_path in excerpts_dir.rglob("*.musicxml"):
+        try:
+            excerpt = parse_excerpt(file_path)
+            if excerpt and excerpt.title.lower() == title.lower():
+                return excerpt
+        except Exception:
+            continue
+
+    return None
+
+
 EXCERPTS_DIR = get_excerpts_dir()
 
 # Testing (will clean up later)
 if __name__ == "__main__":
-    example_file = EXCERPTS_DIR / "clarinet/Mozart Exposition.mxl"
-    score = converter.parse(str(example_file))
-    excerpt = parse_excerpt(example_file)
-    print(excerpt)
+    example_file = EXCERPTS_DIR / "clarinet/Clarinet Concerto in A major, Mvt. 1.mxl"
+    if example_file.exists():
+        score = converter.parse(str(example_file))
+        excerpt = parse_excerpt(example_file)

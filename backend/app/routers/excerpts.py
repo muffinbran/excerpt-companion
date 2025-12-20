@@ -35,8 +35,8 @@ async def get_all_excerpts():
             excerpt = parse_excerpt(file_path)
             if excerpt:
                 excerpts.append(excerpt)
-        except Exception as e:
-            print(f"Error parsing {file_path}: {e}")
+        except Exception:
+            # Skip files that can't be parsed
             continue
 
     return excerpts
@@ -98,27 +98,23 @@ async def get_excerpt_musicxml(excerpt_title: str):
                                     or "score-partwise" in root.tag
                                 ):
                                     xml_content = content
-                                    print(f"Found partwise MusicXML: {xml_file}")
                                     break
                                 elif (
                                     root.tag.endswith("score-timewise")
                                     or "score-timewise" in root.tag
                                 ):
                                     xml_content = content
-                                    print(f"Found timewise MusicXML: {xml_file}")
                                     break
                             except ET.ParseError:
                                 continue
 
-                        except Exception as e:
-                            print(f"Error reading {xml_file}: {e}")
+                        except Exception:
                             continue
 
                     # Fallback to first XML file if no valid MusicXML found
                     if xml_content is None:
                         main_xml = xml_files[0]
                         xml_content = zip_file.read(main_xml).decode("utf-8")
-                        print(f"Using fallback XML file: {main_xml}")
 
                     # Validate that we have some content
                     if not xml_content or len(xml_content.strip()) < 50:

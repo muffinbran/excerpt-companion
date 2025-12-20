@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import OSMDScore from "./OSMDScore";
+import type { OSMDScoreHandle } from "./OSMDScore";
 
 // Type definitions for OSMD-based approach
 interface ExcerptMetadata {
@@ -16,7 +17,8 @@ interface ScoreAreaProps {
   currentExcerpt: string;
 }
 
-export default function ScoreArea({ currentExcerpt }: ScoreAreaProps) {
+const ScoreArea = forwardRef<OSMDScoreHandle, ScoreAreaProps>(
+  ({ currentExcerpt }, ref) => {
   const [excerptMetadata, setExcerptMetadata] =
     useState<ExcerptMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -144,9 +146,13 @@ export default function ScoreArea({ currentExcerpt }: ScoreAreaProps) {
 
         {/* Score Content using OSMD - takes remaining space */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm flex-1">
-          <OSMDScore excerptTitle={currentExcerpt} />
+          <OSMDScore ref={ref} excerptTitle={currentExcerpt} />
         </div>
       </div>
     </div>
   );
-}
+});
+
+ScoreArea.displayName = "ScoreArea";
+
+export default ScoreArea;

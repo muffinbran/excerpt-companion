@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 
 // Constants
@@ -12,8 +12,9 @@ const OSMD_CONFIG = {
   drawTitle: false,
   drawSubtitle: false,
   drawComposer: false,
-  drawCredits: false,
+  drawCredits: true,
   drawMetronomeMarks: false,
+  drawCursor: true,
 };
 
 const DOM_CLEANUP_DELAY = 50;
@@ -22,10 +23,150 @@ interface OSMDScoreProps {
   excerptTitle: string;
 }
 
-export default function OSMDScore({ excerptTitle }: OSMDScoreProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+export interface OSMDScoreHandle {
+  startCursor: (tempo: number) => void;
+  stopCursor: () => void;
+  resetCursor: () => void;
+}
+
+const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
+  ({ excerptTitle }, ref) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const cursorIntervalRef = useRef<number | null>(null);
+
+    // Expose cursor control methods to parent via ref
+    useImperativeHandle(ref, () => ({
+      startCursor: (tempo: number) => {
+        if (!osmdRef.current?.cursor) {
+          console.warn("Cannot start cursor: OSMD not initialized or cursor not available");
+          return;
+        }
+
+        console.log(`Starting OSMD cursor at ${tempo} BPM...`);
+
+        // Clear any existing interval
+        if (cursorIntervalRef.current) {
+          clearTimeout(cursorIntervalRef.current);
+          cursorIntervalRef.current = null;
+        }
+
+        const cursor = osmdRef.current.cursor;
+        cursor.reset();
+        cursor.show();
+
+        // Calculate milliseconds per quarter note
+        const msPerQuarterNote = 60000 / tempo;
+
+        console.log("Cursor started - showing first note");
+
+        // Function to advance cursor and schedule next advancement
+        const advanceCursor = () => {
+          if (!osmdRef.current?.cursor) return;
+
+          const cursor = osmdRef.current.cursor;
+
+          // Advance cursor to next note
+          cursor.next();
+
+          // Check if we've reached the end after advancing
+          if (!cursor.iterator || cursor.iterator.EndReached) {
+            console.log("Cursor reached end of score");
+            cursorIntervalRef.current = null;
+            return;
+          }
+
+          // Now we're at a new position, calculate how long to stay here
+          const currentTimestamp = cursor.iterator.currentTimeStamp;
+          const currentValue = currentTimestamp.RealValue;
+
+          // We need to peek ahead to see when the NEXT note is
+          // Save current state, advance, check next timestamp, then restore
+          cursor.next();
+
+          if (cursor.iterator.EndReached) {
+            // This is the last note, no next note to advance to
+            cursor.previous(); // Go back to the last note
+            cursorIntervalRef.current = null;
+            return;
+          }
+
+          const nextTimestamp = cursor.iterator.currentTimeStamp;
+          const nextValue = nextTimestamp.RealValue;
+
+          // Go back to current note
+          cursor.previous();
+
+          // Calculate duration of CURRENT note (from current to next)
+          const durationInWholeNotes = nextValue - currentValue;
+          const durationInQuarterNotes = durationInWholeNotes * 4;
+          const durationMs = durationInQuarterNotes * msPerQuarterNote;
+
+          // Schedule next advancement after current note's duration
+          if (durationMs > 0) {
+            cursorIntervalRef.current = window.setTimeout(advanceCursor, durationMs);
+          }
+        };
+
+        // Calculate duration of the FIRST note
+        const firstTimestamp = cursor.iterator.currentTimeStamp;
+        const firstValue = firstTimestamp.RealValue;
+
+        // Peek at the next timestamp
+        cursor.next();
+
+        if (!cursor.iterator.EndReached) {
+          const secondTimestamp = cursor.iterator.currentTimeStamp;
+          const secondValue = secondTimestamp.RealValue;
+
+          // Calculate duration of first note
+          const firstDurationInWholeNotes = secondValue - firstValue;
+          const firstDurationInQuarterNotes = firstDurationInWholeNotes * 4;
+          const firstDurationMs = firstDurationInQuarterNotes * msPerQuarterNote;
+
+          console.log(`First note at ${firstValue.toFixed(3)}, duration ${firstDurationInQuarterNotes.toFixed(3)} quarters (${firstDurationMs.toFixed(1)}ms)`);
+
+          // Reset to show the first note
+          cursor.reset();
+          cursor.show();
+
+          // Schedule the first advancement after the first note's duration
+          cursorIntervalRef.current = window.setTimeout(advanceCursor, firstDurationMs);
+        } else {
+          console.log("Score has only one note");
+          cursor.reset();
+          cursor.show();
+        }
+      },
+
+      stopCursor: () => {
+        // Clear the advancement timer
+        if (cursorIntervalRef.current) {
+          clearTimeout(cursorIntervalRef.current);
+          cursorIntervalRef.current = null;
+        }
+
+        if (osmdRef.current?.cursor) {
+          osmdRef.current.cursor.hide();
+          console.log("Cursor stopped and hidden");
+        }
+      },
+
+      resetCursor: () => {
+        // Clear the advancement timer
+        if (cursorIntervalRef.current) {
+          clearTimeout(cursorIntervalRef.current);
+          cursorIntervalRef.current = null;
+        }
+
+        if (osmdRef.current?.cursor) {
+          osmdRef.current.cursor.reset();
+          osmdRef.current.cursor.hide();
+          console.log("Cursor reset and hidden");
+        }
+      },
+    }));
 
   useEffect(() => {
     if (
@@ -113,7 +254,11 @@ export default function OSMDScore({ excerptTitle }: OSMDScoreProps) {
         if (!abortController.signal.aborted) {
           await osmd.load(musicXML);
           osmd.render();
+
           osmdRef.current = osmd;
+          console.log("OSMD score loaded", {
+            hasCursor: !!osmd.cursor,
+          });
         }
       } catch (error) {
         // Ignore AbortError as it's expected when cancelling
@@ -139,6 +284,12 @@ export default function OSMDScore({ excerptTitle }: OSMDScoreProps) {
 
     // Cleanup
     return () => {
+      // Clear cursor advancement timer
+      if (cursorIntervalRef.current) {
+        clearTimeout(cursorIntervalRef.current);
+        cursorIntervalRef.current = null;
+      }
+
       // Abort any ongoing operations
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -167,4 +318,8 @@ export default function OSMDScore({ excerptTitle }: OSMDScoreProps) {
       className="w-full h-full overflow-x-auto bg-white rounded-lg"
     />
   );
-}
+});
+
+OSMDScore.displayName = "OSMDScore";
+
+export default OSMDScore;
