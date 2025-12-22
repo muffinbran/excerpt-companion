@@ -473,10 +473,11 @@ class PerformanceAnalyzer:
         analysis = self.audio_analyzer.add_audio_chunk(chunk)
 
         # Add excerpt-specific analysis if we have the score loaded and a note index is set
-        # Do this whenever we have pitch data, not just on onsets, for continuous feedback
+        # Only send accuracy data AFTER onset has been detected to prevent premature coloring
         if (self.expected_notes and
             0 <= self.current_note_index < len(self.expected_notes) and
-            analysis.get("pitch_hz")):
+            analysis.get("pitch_hz") and
+            self.audio_analyzer.onset_detected):  # Only after onset!
 
             detected_freq = float(analysis["pitch_hz"])
             expected_note = self.expected_notes[self.current_note_index]

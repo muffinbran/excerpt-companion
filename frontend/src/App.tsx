@@ -6,6 +6,17 @@ import RecordingPanel from "./components/RecordingPanel";
 import InstrumentDialog from "./components/InstrumentDialog";
 import type { OSMDScoreHandle } from "./components/OSMDScore";
 
+// Type for note accuracy data
+export interface NoteAccuracyData {
+  noteIndex: number;
+  accuracyLevel: 'excellent' | 'good' | 'fair' | 'poor' | 'very_poor' | 'unknown';
+  pitchAccurate: boolean;
+  isRightNote: boolean;
+  centsOff?: number;
+  detectedNote?: string;
+  expectedPitch?: string;
+}
+
 function App() {
   const [isInstrumentDialogOpen, setIsInstrumentDialogOpen] = useState(false);
   const [currentInstrument, setCurrentInstrument] = useState("");
@@ -17,6 +28,9 @@ function App() {
   const osmdScoreRef = useRef<OSMDScoreHandle | null>(null);
   const cursorMoveCallbackRef = useRef<((noteIndex: number) => void) | undefined>(undefined);
 
+  // State to store note accuracy data
+  const [noteAccuracyMap, setNoteAccuracyMap] = useState<Map<number, NoteAccuracyData>>(new Map());
+
   // Wrapper function that calls the ref's current value
   const handleCursorMove = (noteIndex: number) => {
     cursorMoveCallbackRef.current?.(noteIndex);
@@ -24,6 +38,18 @@ function App() {
 
   const setCursorMoveCallback = (callback: ((noteIndex: number) => void) | undefined) => {
     cursorMoveCallbackRef.current = callback;
+  };
+
+  const handleNoteAccuracy = (accuracyData: NoteAccuracyData) => {
+    setNoteAccuracyMap(prev => {
+      const newMap = new Map(prev);
+      newMap.set(accuracyData.noteIndex, accuracyData);
+      return newMap;
+    });
+  };
+
+  const clearNoteAccuracy = () => {
+    setNoteAccuracyMap(new Map());
   };
 
   const handleTempoChange = (value: number) => {
@@ -64,7 +90,12 @@ function App() {
           onOpenDialog={handleDialogOpen}
         />
 
-        <ScoreArea ref={osmdScoreRef} currentExcerpt={currentExcerpt} onCursorMove={handleCursorMove} />
+        <ScoreArea
+          ref={osmdScoreRef}
+          currentExcerpt={currentExcerpt}
+          onCursorMove={handleCursorMove}
+          noteAccuracyMap={noteAccuracyMap}
+        />
       </div>
 
       {/* Right Panel - Controls */}
@@ -87,6 +118,8 @@ function App() {
           currentTempo={currentTempo}
           osmdScoreRef={osmdScoreRef}
           onSetCursorMoveCallback={setCursorMoveCallback}
+          onNoteAccuracy={handleNoteAccuracy}
+          onClearNoteAccuracy={clearNoteAccuracy}
         />
       </div>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef } from "react";
 import OSMDScore from "./OSMDScore";
 import type { OSMDScoreHandle } from "./OSMDScore";
+import type { NoteAccuracyData } from "../App";
 
 // Type definitions for OSMD-based approach
 interface ExcerptMetadata {
@@ -16,10 +17,11 @@ interface ExcerptMetadata {
 interface ScoreAreaProps {
   currentExcerpt: string;
   onCursorMove?: (noteIndex: number) => void;
+  noteAccuracyMap?: Map<number, NoteAccuracyData>;
 }
 
 const ScoreArea = forwardRef<OSMDScoreHandle, ScoreAreaProps>(
-  ({ currentExcerpt, onCursorMove }, ref) => {
+  ({ currentExcerpt, onCursorMove, noteAccuracyMap }, ref) => {
   const [excerptMetadata, setExcerptMetadata] =
     useState<ExcerptMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -147,7 +149,12 @@ const ScoreArea = forwardRef<OSMDScoreHandle, ScoreAreaProps>(
 
         {/* Score Content using OSMD - takes remaining space */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm flex-1">
-          <OSMDScore ref={ref} excerptTitle={currentExcerpt} onCursorMove={onCursorMove} />
+          <OSMDScore
+            ref={ref}
+            excerptTitle={currentExcerpt}
+            onCursorMove={onCursorMove}
+            noteAccuracyMap={noteAccuracyMap}
+          />
         </div>
       </div>
     </div>
