@@ -397,12 +397,22 @@ class PerformanceAnalyzer:
                 self.excerpt = parse_excerpt(file_path)
 
         if self.excerpt:
-            # Extract notes (skip rests for now)
+            # Extract all notes and rests
             for item in self.excerpt.notes_and_rests:
-                # Check if it's a note (has pitch attribute) and not a rest
+                # Check if it's a note (has pitch attribute)
                 if hasattr(item, 'pitch'):
                     pitch = item.pitch
-                    if pitch and pitch != "rest":
+                    if pitch == "rest" or not pitch:
+                        # This is a rest
+                        self.expected_notes.append({
+                            "pitch": "rest",
+                            "frequency": None,
+                            "duration_quarter": item.duration_quarter,
+                            "offset": item.offset,
+                            "is_rest": True,
+                        })
+                    else:
+                        # This is a regular note
                         freq = note_to_frequency(pitch)
                         if freq:
                             self.expected_notes.append({
@@ -410,6 +420,7 @@ class PerformanceAnalyzer:
                                 "frequency": freq,
                                 "duration_quarter": item.duration_quarter,
                                 "offset": item.offset,
+                                "is_rest": False,
                             })
 
     def _frequency_to_note(self, frequency: float) -> str:
@@ -472,60 +483,46 @@ class PerformanceAnalyzer:
         # Get basic audio analysis
         analysis = self.audio_analyzer.add_audio_chunk(chunk)
 
-        # Add excerpt-specific analysis if we have the score loaded and a note index is set
-        # Only send accuracy data AFTER onset has been detected to prevent premature coloring
+        # Check if current note is a rest and include that information
         if (self.expected_notes and
-            0 <= self.current_note_index < len(self.expected_notes) and
-            analysis.get("pitch_hz") and
-            self.audio_analyzer.onset_detected):  # Only after onset!
+            0 <= self.current_note_index < len(self.expected_notes)):
 
-            detected_freq = float(analysis["pitch_hz"])
             expected_note = self.expected_notes[self.current_note_index]
-            expected_freq = float(expected_note["frequency"])
 
-            # Calculate pitch accuracy (cents off)
-            # cents = 1200 * log2(detected / expected)
-            cents_off = 1200 * np.log2(detected_freq / expected_freq)
+            # Always include rest information if current note is a rest
+            if expected_note.get("is_rest", False):
+                analysis["is_rest"] = True
+                analysis["current_note_index"] = int(self.current_note_index)
+                analysis["expected_pitch"] = "rest"
+                print(f"[Analyzer] Note {self.current_note_index}: REST")
+                return analysis
 
-            # Determine accuracy level with more nuanced feedback
-            abs_cents = abs(cents_off)
-            if abs_cents <= 10:
-                accuracy_level = "excellent"  # Very close, professional level
-                is_accurate = True
-            elif abs_cents <= 25:
-                accuracy_level = "good"       # Good intonation, acceptable
-                is_accurate = True
-            elif abs_cents <= 50:
-                accuracy_level = "fair"       # Noticeable but not terrible
-                is_accurate = True
-            elif abs_cents <= 100:
-                accuracy_level = "poor"       # Clearly off pitch
-                is_accurate = False
-            else:
-                accuracy_level = "very_poor"  # Way off, wrong note territory
-                is_accurate = False
+            # For regular notes, only send accuracy data AFTER onset has been detected
+            if (analysis.get("pitch_hz") and
+                self.audio_analyzer.onset_detected):  # Only after onset!
 
-            # Determine if it's the right note (within reasonable semitone range)
-            # Allow up to 75 cents off before considering it the wrong note
-            is_right_note = abs_cents <= 75
+                detected_freq = float(analysis["pitch_hz"])
+                expected_freq = float(expected_note["frequency"])
 
-            # Convert detected frequency back to note name for logging
-            detected_note = self._frequency_to_note(detected_freq)
+                # Calculate pitch accuracy (cents off)
+                # cents = 1200 * log2(detected / expected)
+                cents_off = 1200 * np.log2(detected_freq / expected_freq)
 
-            # Only log on onset detection to avoid spam, but always include the data
-            if analysis.get("onset_detected"):
-                print(f"[Analyzer] Note {self.current_note_index}: Detected {detected_note} ({detected_freq:.1f} Hz), "
-                      f"Expected {expected_note['pitch']} ({expected_freq:.1f} Hz), "
-                      f"Cents off: {cents_off:.1f}, Accuracy: {accuracy_level}")
+                # Convert detected frequency back to note name for logging
+                detected_note = self._frequency_to_note(detected_freq)
 
-            analysis["expected_pitch"] = expected_note["pitch"]
-            analysis["expected_frequency"] = expected_freq
-            analysis["cents_off"] = float(cents_off)
-            analysis["pitch_accurate"] = bool(is_accurate)
-            analysis["accuracy_level"] = accuracy_level
-            analysis["is_right_note"] = bool(is_right_note)
-            analysis["current_note_index"] = int(self.current_note_index)
-            analysis["detected_note"] = detected_note
+                # Only log on onset detection to avoid spam, but always include the data
+                if analysis.get("onset_detected"):
+                    print(f"[Analyzer] Note {self.current_note_index}: Detected {detected_note} ({detected_freq:.1f} Hz), "
+                          f"Expected {expected_note['pitch']} ({expected_freq:.1f} Hz), "
+                          f"Cents off: {cents_off:.1f}")
+
+                analysis["expected_pitch"] = expected_note["pitch"]
+                analysis["expected_frequency"] = expected_freq
+                analysis["cents_off"] = float(cents_off)
+                analysis["current_note_index"] = int(self.current_note_index)
+                analysis["detected_note"] = detected_note
+                analysis["is_rest"] = False
 
         return analysis
 

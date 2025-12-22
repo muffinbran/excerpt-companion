@@ -105,67 +105,36 @@ export class WebSocketManager {
             this.onSoundOnset();
           }
 
-          // Log pitch detection with score comparison (only after first onset detected)
-          if (analysis.pitch_hz && analysis.expected_pitch && this.hasDetectedOnset) {
-            const centsStr = analysis.cents_off
-              ? (analysis.cents_off > 0 ? `+${analysis.cents_off.toFixed(1)}` : analysis.cents_off.toFixed(1))
-              : "?";
-
-            // Enhanced visual feedback based on accuracy level
-            let accuracyIcon = "?";
-            let color = "#888888";
-            let accuracyText = "Unknown";
-
-            if (analysis.accuracy_level) {
-              switch (analysis.accuracy_level) {
-                case "excellent":
-                  accuracyIcon = "🎯";
-                  color = "#00ff00";
-                  accuracyText = "Excellent";
-                  break;
-                case "good":
-                  accuracyIcon = "✓";
-                  color = "#90ee90";
-                  accuracyText = "Good";
-                  break;
-                case "fair":
-                  accuracyIcon = "~";
-                  color = "#ffff00";
-                  accuracyText = "Fair";
-                  break;
-                case "poor":
-                  accuracyIcon = "✗";
-                  color = "#ff6b6b";
-                  accuracyText = "Poor";
-                  break;
-                case "very_poor":
-                  accuracyIcon = "❌";
-                  color = "#ff0000";
-                  accuracyText = "Very Poor";
-                  break;
-                default:
-                  // Fallback to original behavior
-                  accuracyIcon = analysis.pitch_accurate ? "✓" : "✗";
-                  color = analysis.pitch_accurate ? "#00ff00" : "#ff6b6b";
-                  accuracyText = analysis.pitch_accurate ? "Good" : "Off";
-              }
-            } else {
-              // Fallback to original behavior if no accuracy_level
-              accuracyIcon = analysis.pitch_accurate ? "✓" : "✗";
-              color = analysis.pitch_accurate ? "#00ff00" : "#ff6b6b";
-              accuracyText = analysis.pitch_accurate ? "Good" : "Off";
-            }
-
-            const detectedNote = analysis.detected_note || "?";
-            const wrongNoteWarning = analysis.is_right_note === false ? " [WRONG NOTE]" : "";
-
+          // Log rests separately (no onset detection required for rests)
+          if (analysis.is_rest) {
             console.log(
-              `%c${accuracyIcon} Note ${analysis.current_note_index}: Expected ${analysis.expected_pitch} | ` +
-              `Detected ${detectedNote} (${analysis.pitch_hz.toFixed(1)} Hz) | ` +
-              `Cents off: ${centsStr} | Accuracy: ${accuracyText}${wrongNoteWarning}`,
-              `color: ${color}; font-weight: bold`
+              `%c🎵 Note ${analysis.current_note_index}: REST`,
+              `color: #999999; font-weight: bold`
             );
           }
+
+          // Log pitch detection with score comparison (only after first onset detected)
+          // if (analysis.pitch_hz && analysis.expected_pitch && this.hasDetectedOnset) {
+          //   const centsStr = analysis.cents_off
+          //     ? (analysis.cents_off > 0 ? `+${analysis.cents_off.toFixed(1)}` : analysis.cents_off.toFixed(1))
+          //     : "?";
+          //
+          //   // Categorize accuracy based on cents deviation (frontend decision)
+          //   const absCents = Math.abs(analysis.cents_off || 0);
+          //   const isCorrect = absCents <= 50; // 50 cents threshold for correct
+          //   const accuracyIcon = isCorrect ? "✓" : "✗";
+          //   const color = isCorrect ? "#00ff00" : "#ff0000";
+          //   const accuracyText = isCorrect ? "Correct" : "Incorrect";
+          //
+          //   const detectedNote = analysis.detected_note || "?";
+          //
+          //   console.log(
+          //     `%c${accuracyIcon} Note ${analysis.current_note_index}: Expected ${analysis.expected_pitch} | ` +
+          //     `Detected ${detectedNote} (${analysis.pitch_hz.toFixed(1)} Hz) | ` +
+          //     `Cents off: ${centsStr} | ${accuracyText}`,
+          //     `color: ${color}; font-weight: bold`
+          //   );
+          // }
 
           // Call analysis callback for custom handling
           this.onAnalysis(analysis);
@@ -173,8 +142,8 @@ export class WebSocketManager {
 
         // Handle summary/report data
         if (data.status === "summary") {
-          console.log("%c📋 PERFORMANCE SUMMARY", "color: #ffaa00; font-weight: bold; font-size: 14px");
-          console.table(data.data);
+          // console.log("%c📋 PERFORMANCE SUMMARY", "color: #ffaa00; font-weight: bold; font-size: 14px");
+          // console.table(data.data);
 
           // Also log as structured object for inspection
           console.log("Raw summary data:", data.data);

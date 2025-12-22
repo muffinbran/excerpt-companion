@@ -9,7 +9,7 @@ import type { OSMDScoreHandle } from "./components/OSMDScore";
 // Type for note accuracy data
 export interface NoteAccuracyData {
   noteIndex: number;
-  accuracyLevel: 'excellent' | 'good' | 'fair' | 'poor' | 'very_poor' | 'unknown';
+  accuracyLevel: 'correct' | 'incorrect';
   pitchAccurate: boolean;
   isRightNote: boolean;
   centsOff?: number;

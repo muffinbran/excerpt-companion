@@ -38,142 +38,118 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
       const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
       const abortControllerRef = useRef<AbortController | null>(null);
       const cursorIntervalRef = useRef<number | null>(null);
-      const currentNoteIndexRef = useRef<number>(0);
-      const [currentNoteIndex, setCurrentNoteIndex] = useState<number>(0);
+    const currentNoteIndexRef = useRef<number>(0);
+    const [currentNoteIndex, setCurrentNoteIndex] = useState<number>(0);
+    const restIndicesRef = useRef<Set<number>>(new Set());
 
-      // Function to color notes synchronously (extracted for performance)
-      const colorNotesUpToIndex = useCallback((upToIndex: number) => {
-        if (!osmdRef.current || !containerRef.current) {
+    // Synchronous function to color notes immediately
+    const colorNotesUpToIndex = useCallback((upToIndex: number) => {
+      if (!osmdRef.current || !containerRef.current) {
+        return;
+      }
+
+      try {
+        const svgElement = containerRef.current.querySelector('svg');
+        if (!svgElement) {
           return;
         }
 
-        try {
-          const svgElement = containerRef.current.querySelector('svg');
-          if (!svgElement) {
-            return;
+        const staveNotes = svgElement.querySelectorAll('g.vf-stavenote');
+
+        // Filter out grace notes
+        const actualNotes = Array.from(staveNotes).filter(noteGroup => {
+          const parent = noteGroup.parentElement;
+          return !(parent && parent.classList.contains('vf-modifiers'));
+        });
+
+        console.log(`Coloring notes up to index ${upToIndex}, total notes: ${actualNotes.length}, rest indices:`, Array.from(restIndicesRef.current));
+
+        const shouldReset = !noteAccuracyMap || noteAccuracyMap.size === 0;
+
+        actualNotes.forEach((noteGroup, index) => {
+          let color = "#000000";
+
+          // Check if this index is a rest and it's up to the current index
+          if (restIndicesRef.current.has(index) && index <= upToIndex) {
+            // This is a rest up to current index, keep it black
+            color = "#000000";
+            // console.log(`Index ${index} is a rest up to current index, coloring black`);
+          } else if (!shouldReset && index <= upToIndex) {
+            const accuracyData = noteAccuracyMap?.get(index);
+
+            if (accuracyData) {
+              // Green for correct, darker red for incorrect
+              color = accuracyData.accuracyLevel === 'correct' ? "#00aa00" : "#cc0000";
+              // console.log(`Index ${index} has accuracy data, coloring ${color}`);
+            } else {
+              // No accuracy data - color darker red
+              color = "#cc0000";
+              // console.log(`Index ${index} <= ${upToIndex} but no accuracy data, coloring red`);
+            }
           }
 
-          const staveNotes = svgElement.querySelectorAll('g.vf-stavenote');
-          const actualNotes = Array.from(staveNotes).filter(noteGroup => {
-            const classes = noteGroup.getAttribute('class') || '';
+          const noteId = noteGroup.getAttribute('id') || '';
 
-            // Filter out rests
-            if (classes.includes('vf-rest')) {
-              return false;
-            }
-            if (noteGroup.querySelector('.vf-rest, [class*="rest"]') !== null) {
-              return false;
-            }
-
-            // Filter out grace notes - they are vf-stavenote elements inside vf-modifiers
-            const parent = noteGroup.parentElement;
-            if (parent && parent.classList.contains('vf-modifiers')) {
-              return false;
-            }
-
-            return true;
+          // Color note heads
+          const noteheads = noteGroup.querySelectorAll('.vf-note .vf-notehead path');
+          noteheads.forEach((path) => {
+            (path as SVGElement).style.fill = color;
+            (path as SVGElement).style.stroke = color;
           });
 
-          const shouldReset = !noteAccuracyMap || noteAccuracyMap.size === 0;
-
-          actualNotes.forEach((noteGroup, index) => {
-            let color = "#000000";
-
-            if (!shouldReset && index <= upToIndex) {
-              const accuracyData = noteAccuracyMap?.get(index);
-              if (accuracyData) {
-                switch (accuracyData.accuracyLevel) {
-                  case 'excellent':
-                    color = "#00aa00";
-                    break;
-                  case 'good':
-                    color = "#66cc66";
-                    break;
-                  case 'fair':
-                    color = "#ffcc00";
-                    break;
-                  case 'poor':
-                    color = "#ff6666";
-                    break;
-                  case 'very_poor':
-                    color = "#cc0000";
-                    break;
-                  case 'unknown':
-                    color = "#888888";
-                    break;
-                }
-              }
-            }
-
-            const noteId = noteGroup.getAttribute('id') || '';
-
-            // Color note heads
-            const noteheads = noteGroup.querySelectorAll('.vf-note .vf-notehead path');
-            noteheads.forEach((path) => {
-              (path as SVGElement).style.fill = color;
-              (path as SVGElement).style.stroke = color;
-            });
-
-            // Color internal stems (unbeamed notes)
-            const internalStems = noteGroup.querySelectorAll('.vf-note .vf-stem path');
-            internalStems.forEach((path) => {
-              (path as SVGElement).style.fill = color;
-              (path as SVGElement).style.stroke = color;
-            });
-
-            // Color external stems (beamed notes)
-            if (noteId) {
-              const stemId = `${noteId}-stem`;
-              const externalStem = svgElement.querySelector(`#${CSS.escape(stemId)}`);
-              if (externalStem) {
-                const stemPaths = externalStem.querySelectorAll('path');
-                stemPaths.forEach((path) => {
-                  (path as SVGElement).style.fill = color;
-                  (path as SVGElement).style.stroke = color;
-                });
-              }
-            }
-
-            // Color flags
-            const flags = noteGroup.querySelectorAll('.vf-flag path');
-            flags.forEach((path) => {
-              (path as SVGElement).style.fill = color;
-              (path as SVGElement).style.stroke = color;
-            });
-
-            // Color dots
-            const modifiers = noteGroup.querySelectorAll('.vf-modifiers circle');
-            modifiers.forEach((circle) => {
-              (circle as SVGElement).style.fill = color;
-              (circle as SVGElement).style.stroke = color;
-            });
-
-            // Color accidentals
-            const accidentals = noteGroup.querySelectorAll('.vf-modifiers path');
-            accidentals.forEach((path) => {
-              (path as SVGElement).style.fill = color;
-              (path as SVGElement).style.stroke = color;
-            });
-
-            // Color ledger lines
-            if (noteId) {
-              const ledgersId = `${noteId}ledgers`;
-              const ledgers = svgElement.querySelector(`#${CSS.escape(ledgersId)}`);
-              if (ledgers) {
-                const ledgerPaths = ledgers.querySelectorAll('path');
-                ledgerPaths.forEach((path) => {
-                  (path as SVGElement).style.fill = color;
-                  (path as SVGElement).style.stroke = color;
-                });
-              }
-            }
+          // Color internal stems
+          const internalStems = noteGroup.querySelectorAll('.vf-note .vf-stem path');
+          internalStems.forEach((path) => {
+            (path as SVGElement).style.fill = color;
+            (path as SVGElement).style.stroke = color;
           });
-        } catch (error) {
-          console.warn("Error coloring notes:", error);
-        }
-      }, [noteAccuracyMap]);
 
-      // Expose cursor control methods to parent via ref
+          // Color external stems (beamed notes)
+          if (noteId) {
+            const stemId = `${noteId}-stem`;
+            const externalStem = svgElement.querySelector(`#${CSS.escape(stemId)}`);
+            if (externalStem) {
+              const stemPaths = externalStem.querySelectorAll('path');
+              stemPaths.forEach((path) => {
+                (path as SVGElement).style.fill = color;
+                (path as SVGElement).style.stroke = color;
+              });
+            }
+          }
+
+          // Color flags
+          const flags = noteGroup.querySelectorAll('.vf-flag path');
+          flags.forEach((path) => {
+            (path as SVGElement).style.fill = color;
+            (path as SVGElement).style.stroke = color;
+          });
+
+          // Color dots/accidentals
+          const modifiers = noteGroup.querySelectorAll('.vf-modifiers circle, .vf-modifiers path');
+          modifiers.forEach((element) => {
+            (element as SVGElement).style.fill = color;
+            (element as SVGElement).style.stroke = color;
+          });
+
+          // Color ledger lines
+          if (noteId) {
+            const ledgersId = `${noteId}ledgers`;
+            const ledgers = svgElement.querySelector(`#${CSS.escape(ledgersId)}`);
+            if (ledgers) {
+              const ledgerPaths = ledgers.querySelectorAll('path');
+              ledgerPaths.forEach((path) => {
+                (path as SVGElement).style.fill = color;
+                (path as SVGElement).style.stroke = color;
+              });
+            }
+          }
+        });
+      } catch (error) {
+        console.warn("Error coloring notes:", error);
+      }
+    }, [noteAccuracyMap]);
+
+    // Expose cursor control methods to parent via ref
       useImperativeHandle(ref, () => ({
         startCursor: (tempo: number) => {
           if (!osmdRef.current?.cursor) {
@@ -193,14 +169,14 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
           cursor.reset();
           cursor.show();
 
-          // Reset note index and notify
-          currentNoteIndexRef.current = 0;
-          setCurrentNoteIndex(0);
-          colorNotesUpToIndex(0); // Color immediately for instant feedback
-          if (onCursorMove) {
-            console.log(`[Cursor] Starting at note 0`);
-            onCursorMove(0);
-          }
+        // Reset note index and notify
+        currentNoteIndexRef.current = 0;
+        setCurrentNoteIndex(0);
+        colorNotesUpToIndex(0); // Color immediately
+        if (onCursorMove) {
+          console.log(`[Cursor] Starting at note 0`);
+          onCursorMove(0);
+        }
 
           // Calculate milliseconds per quarter note
           const msPerQuarterNote = 60000 / tempo;
@@ -216,14 +192,14 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
             // Advance cursor to next note
             cursor.next();
 
-            // Increment note index and notify
-            currentNoteIndexRef.current++;
-            setCurrentNoteIndex(currentNoteIndexRef.current);
-            colorNotesUpToIndex(currentNoteIndexRef.current); // Color immediately for instant feedback
-            if (onCursorMove) {
-              console.log(`[Cursor] Advanced to note ${currentNoteIndexRef.current}`);
-              onCursorMove(currentNoteIndexRef.current);
-            }
+          // Increment note index and notify
+          currentNoteIndexRef.current++;
+          setCurrentNoteIndex(currentNoteIndexRef.current);
+          colorNotesUpToIndex(currentNoteIndexRef.current); // Color immediately
+          if (onCursorMove) {
+            console.log(`[Cursor] Advanced to note ${currentNoteIndexRef.current}`);
+            onCursorMove(currentNoteIndexRef.current);
+          }
 
             // Check if we've reached the end after advancing
             if (!cursor.iterator || cursor.iterator.EndReached) {
@@ -411,6 +387,52 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
               osmd.render();
 
               osmdRef.current = osmd;
+
+              // Build list of rest indices after loading
+              if (osmd.cursor) {
+                const restIndices = new Set<number>();
+                const cursor = osmd.cursor;
+
+                // First, get all SVG stavenotes and filter out grace notes
+                const svgElement = containerRef.current?.querySelector('svg');
+                if (svgElement) {
+                  const staveNotes = svgElement.querySelectorAll('g.vf-stavenote');
+                  const nonGraceNotes: Element[] = [];
+
+                  staveNotes.forEach(noteGroup => {
+                    const parent = noteGroup.parentElement;
+                    const isGraceNote = parent && parent.classList.contains('vf-modifiers');
+                    if (!isGraceNote) {
+                      nonGraceNotes.push(noteGroup);
+                    }
+                  });
+
+                  console.log(`Total non-grace notes in SVG: ${nonGraceNotes.length}`);
+
+                  // Now iterate through cursor and match to non-grace notes
+                  cursor.reset();
+                  let index = 0;
+
+                  while (!cursor.iterator.EndReached) {
+                    const notesUnderCursor = cursor.NotesUnderCursor();
+                    const isRest = notesUnderCursor && notesUnderCursor.length > 0 && notesUnderCursor[0].isRest();
+
+                    if (isRest) {
+                      restIndices.add(index);
+                      console.log(`Rest found at index ${index}`);
+                    }
+
+                    cursor.next();
+                    index++;
+                  }
+
+                  cursor.reset();
+                  restIndicesRef.current = restIndices;
+                  console.log(`Found ${restIndices.size} rests at indices:`, Array.from(restIndices));
+                  console.log(`Total cursor positions: ${index}`);
+                }
+              }
+
               console.log("OSMD score loaded", {
                 hasCursor: !!osmd.cursor,
               });
@@ -467,16 +489,16 @@ const OSMDScore = forwardRef<OSMDScoreHandle, OSMDScoreProps>(
         };
       }, [excerptTitle]);
 
-      // Effect to color notes based on accuracy data
-      // This re-colors when accuracy map changes (e.g., backend sends updates)
-      useEffect(() => {
-        if (!osmdRef.current) {
-          return;
-        }
+  // Effect to color notes based on accuracy data
+  // This re-colors when accuracy map changes (e.g., backend sends updates)
+  useEffect(() => {
+    if (!osmdRef.current) {
+      return;
+    }
 
-        // Call the synchronous coloring function
-        colorNotesUpToIndex(currentNoteIndex);
-      }, [noteAccuracyMap, currentNoteIndex, colorNotesUpToIndex]);
+    // Call the synchronous coloring function
+    colorNotesUpToIndex(currentNoteIndex);
+  }, [noteAccuracyMap, currentNoteIndex, colorNotesUpToIndex]);
 
       return (
           <div

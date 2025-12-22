@@ -63,12 +63,16 @@ export default function RecordingPanel({
     // Set up analysis callback to receive all backend data
     manager.onAnalysis = (analysis) => {
       // Forward note accuracy data to parent component
-      if (analysis.current_note_index !== undefined && analysis.accuracy_level) {
+      if (analysis.current_note_index !== undefined && analysis.cents_off !== undefined) {
+        // Categorize accuracy based on cents deviation (frontend decision)
+        const absCents = Math.abs(analysis.cents_off);
+        const accuracyLevel = absCents <= 50 ? 'correct' : 'incorrect';
+
         const accuracyData: NoteAccuracyData = {
           noteIndex: analysis.current_note_index,
-          accuracyLevel: analysis.accuracy_level || 'unknown',
-          pitchAccurate: analysis.pitch_accurate || false,
-          isRightNote: analysis.is_right_note !== false,
+          accuracyLevel: accuracyLevel,
+          pitchAccurate: absCents <= 50,
+          isRightNote: absCents <= 75, // Allow up to 75 cents before considering wrong note
           centsOff: analysis.cents_off,
           detectedNote: analysis.detected_note,
           expectedPitch: analysis.expected_pitch,
